@@ -168,6 +168,90 @@ app.get('/recommendations', async (req, res) => {
     }
 });
 
+// POST route to add a new query
+app.post('/queries', async (req, res) => {
+    const { productName, productBrand, productImageURL, queryTitle, boycottingReasonDetails, userEmail } = req.body;
+
+    if (!productName || !productBrand || !productImageURL || !queryTitle || !boycottingReasonDetails) {
+        return res.status(400).json({ error: "All fields are required." });
+    }
+
+    try {
+        const query = {
+            productName,
+            productBrand,
+            productImageURL,
+            queryTitle,
+            boycottingReasonDetails,
+            userEmail,
+            createdAt: new Date()
+        };
+
+        const result = await productsCollection.insertOne(query);
+        res.status(201).json({ message: "Query added successfully", queryId: result.insertedId });
+    } catch (error) {
+        console.error("Error adding query:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+// GET route to fetch queries by user email
+app.get('/queries/byUserEmail', async (req, res) => {
+    const { userEmail } = req.query;
+
+    try {
+        const queries = await productsCollection.find({ userEmail }).toArray();
+        res.status(200).json(queries);
+    } catch (error) {
+        console.error("Error fetching queries:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+// GET route to fetch the latest 3 queries
+app.get('/queries/latest', async (req, res) => {
+    const { limit, sort } = req.query;
+    
+    try {
+        const queryLimit = limit ? parseInt(limit) : 3; // Default to 3 queries
+        const querySort = sort === 'desc' ? -1 : 1; // Sort descending by default
+
+        const queries = await productsCollection
+            .find({})
+            .sort({ timestamp: querySort })  // Sort by timestamp field
+            .limit(queryLimit)               // Limit to the latest 3 queries
+            .toArray();
+
+        res.status(200).json(queries);
+    } catch (error) {
+        console.error("Error fetching queries:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+// DELETE route to remove a specific query by its ID
+app.delete('/query/:queryId', async (req, res) => {
+    const { queryId } = req.params;
+
+    if (!queryId) {
+        return res.status(400).json({ error: "Query ID is required." });
+    }
+
+    try {
+        const result = await productsCollection.deleteOne({ _id: new ObjectId(queryId) });
+
+        if (result.deletedCount === 0) {
+            return res.status(404).json({ error: "Query not found." });
+        }
+
+        res.status(200).json({ message: "Query deleted successfully" });
+    } catch (error) {
+        console.error("Error deleting query:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+
 
 // Start the connection and server
 connectToDB();
