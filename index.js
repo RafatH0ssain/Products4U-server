@@ -1,17 +1,19 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+
 const app = express();
 const port = process.env.PORT || 5000;
-const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
+// MongoDB URI
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PW}@cluster0.oyqb2.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
+// MongoDB Client Setup
 const client = new MongoClient(uri, {
     tls: true,
     serverApi: {
@@ -21,38 +23,63 @@ const client = new MongoClient(uri, {
     }
 });
 
-const db = client.db("Products4U");
-const productsCollection = db.collection("ProductsDB");
-
-async function connectToDB() {
+// Connect to the database
+const connectToDB = async () => {
     try {
         await client.connect();
         console.log("Connected to MongoDB!");
 
-        // You can now interact with the "ProductsBD" collection
+        const db = client.db("Products4U");  // Database name
+        const productsCollection = db.collection("ProductsDB");  // Collection name
+
+        // Test the connection and fetch count
         const productCount = await productsCollection.countDocuments();
         console.log(`Number of products in the collection: ${productCount}`);
-        console.log("Connected to database:", db.databaseName);
-        console.log("Connected to collection:", productsCollection.collectionName);
+
+        // You can now start listening to requests
+        app.listen(port, () => {
+            console.log(`Server running on PORT: ${port}`);
+        });
 
     } catch (error) {
         console.error("Error connecting to MongoDB:", error);
-    } finally {
-        // await client.close(); // Close the connection when done
+        process.exit(1);  // Exit the app if DB connection fails
     }
-}
+};
 
-app.listen(port, () => {
-    console.log(`Sports server is running on PORT: ${port}`)
-})
+// GET route to fetch products/queries
+app.get('/queries', async (req, res) => {
+    const db = client.db("Products4U");
+    const productsCollection = db.collection("ProductsDB");
 
-app.get('/queries', (req, res) => {
-    productsCollection.find().toArray()
-        .then(result => res.send(result))
+    try {
+        const queries = await productsCollection.find({}).toArray(); // Get all products
+        res.status(200).json(queries);
+    } catch (error) {
+        console.error("Error fetching queries:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+app.get('/query/:id', (req, res) => {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) {
+        return res.status(400).json({ error: 'Invalid ID format' });
+    }
+
+    productsCollection.findOne({ _id: new ObjectId(id) })
+        .then(result => {
+            if (result) {
+                res.status(200).json(result);
+            } else {
+                res.status(404).json({ error: 'No record found with that ID' });
+            }
+        })
         .catch(error => {
-            console.error("Error fetching equipment:", error);
-            res.status(500).json({ error: "Internal Server Error" });
+            console.error('Error fetching equipment:', error);
+            res.status(500).json({ error: 'Internal Server Error' });
         });
 });
 
+// Start the connection and server
 connectToDB();
