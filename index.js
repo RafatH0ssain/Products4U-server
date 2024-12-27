@@ -22,25 +22,37 @@ const client = new MongoClient(uri, {
 });
 
 const db = client.db("Products4U");
-const sportsCollection = db.collection("ProductsDB");
+const productsCollection = db.collection("ProductsDB");
 
 async function connectToDB() {
     try {
         await client.connect();
         console.log("Connected to MongoDB!");
-        
+
         // You can now interact with the "ProductsBD" collection
-        const productCount = await sportsCollection.countDocuments();
+        const productCount = await productsCollection.countDocuments();
         console.log(`Number of products in the collection: ${productCount}`);
         console.log("Connected to database:", db.databaseName);
-console.log("Connected to collection:", sportsCollection.collectionName);
+        console.log("Connected to collection:", productsCollection.collectionName);
 
-        
     } catch (error) {
         console.error("Error connecting to MongoDB:", error);
     } finally {
         // await client.close(); // Close the connection when done
     }
 }
+
+app.listen(port, () => {
+    console.log(`Sports server is running on PORT: ${port}`)
+})
+
+app.get('/queries', (req, res) => {
+    productsCollection.find().toArray()
+        .then(result => res.send(result))
+        .catch(error => {
+            console.error("Error fetching equipment:", error);
+            res.status(500).json({ error: "Internal Server Error" });
+        });
+});
 
 connectToDB();
