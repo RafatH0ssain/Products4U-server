@@ -2,7 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -23,14 +22,15 @@ const client = new MongoClient(uri, {
     }
 });
 
+const db = client.db("Products4U");  // Database name
+const productsCollection = db.collection("ProductsDB");  // Collection name
+const recommendationCollection = db.collection("RecommendationsDB"); 
+
 // Connect to the database
 const connectToDB = async () => {
     try {
-        await client.connect();
+        // await client.connect();
         console.log("Connected to MongoDB!");
-
-        const db = client.db("Products4U");  // Database name
-        const productsCollection = db.collection("ProductsDB");  // Collection name
 
         // Test the connection and fetch count
         const productCount = await productsCollection.countDocuments();
@@ -80,6 +80,94 @@ app.get('/query/:id', (req, res) => {
             res.status(500).json({ error: 'Internal Server Error' });
         });
 });
+
+// POST route to save recommendations
+app.post('/recommendation', async (req, res) => {
+    const {
+        title,
+        productName,
+        productImage,
+        reason,
+        queryId,
+        queryTitle,
+        userEmail,
+        userName,
+        recommenderEmail,
+        recommenderName,
+        timestamp
+    } = req.body;
+
+    try {
+        const recommendation = {
+            title,
+            productName,
+            productImage,
+            reason,
+            queryId,
+            queryTitle,
+            userEmail,
+            userName,
+            recommenderEmail,
+            recommenderName,
+            timestamp
+        };
+
+        const result = await recommendationCollection.insertOne(recommendation);
+
+        if (result.insertedId) {
+            // Successfully inserted the recommendation
+            res.status(201).json({ message: 'Recommendation added successfully!' });
+        } else {
+            res.status(400).json({ error: 'Failed to add recommendation' });
+        }
+    } catch (error) {
+        console.error('Error adding recommendation:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// PATCH route to update the recommendation count of the query
+app.patch('/update-query/:id', async (req, res) => {
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+        return res.status(400).json({ error: 'Invalid ID format' });
+    }
+
+    try {
+        const result = await productsCollection.updateOne(
+            { _id: new ObjectId(id) },
+            { $inc: { recommendationCount: 1 } } // Increment recommendation count
+        );
+
+        if (result.modifiedCount === 1) {
+            res.status(200).json({ message: 'Recommendation count updated successfully!' });
+        } else {
+            res.status(404).json({ error: 'Query not found' });
+        }
+    } catch (error) {
+        console.error('Error updating recommendation count:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// GET route to fetch recommendations by logged-in user's email
+app.get('/recommendations', async (req, res) => {
+    const userEmail = req.query.userEmail;  // Getting the email from the query parameter
+
+    if (!userEmail) {
+        return res.status(400).json({ error: 'User email is required' });
+    }
+
+    try {
+        const recommendations = await recommendationCollection.find({ recommenderEmail: userEmail }).toArray();
+        res.status(200).json(recommendations);
+    } catch (error) {
+        console.error("Error fetching recommendations:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
 
 // Start the connection and server
 connectToDB();
