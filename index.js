@@ -251,6 +251,96 @@ app.delete('/query/:queryId', async (req, res) => {
     }
 });
 
+// Corrected route to fetch recommendations for the user's queries
+app.get('/recommendations/byUserQueries', async (req, res) => {
+    const { userEmail } = req.query;
+
+    if (!userEmail) {
+        return res.status(400).json({ error: "User email is required" });
+    }
+
+    try {
+        // First, find all queries by the logged-in user
+        const userQueries = await productsCollection.find({ userEmail }).toArray();
+
+        if (!userQueries || userQueries.length === 0) {
+            return res.status(404).json({ message: "No queries found for the user." });
+        }
+
+        // Extract the _id of the queries to use for fetching recommendations
+        const queryIds = userQueries.map(query => query._id);
+
+        // Find recommendations matching any of the user's queryIds
+        const recommendations = await recommendationCollection.find({
+            queryId: { $in: queryIds }  // Match recommendations with the user's queries
+        }).toArray();
+
+        res.status(200).json(recommendations);
+    } catch (error) {
+        console.error("Error fetching recommendations for user's queries:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+// Delete a recommendation
+app.delete('/recommendations/:id', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const result = await recommendationCollection.deleteOne({ _id: ObjectId(id) });
+
+        if (result.deletedCount === 0) {
+            return res.status(404).json({ message: "Recommendation not found." });
+        }
+
+        res.status(200).json({ message: "Recommendation deleted successfully." });
+    } catch (error) {
+        console.error("Error deleting recommendation:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+app.get('/recommendations/byQuery/:queryId', async (req, res) => {
+    const { queryId } = req.params;
+    try {
+        const recommendations = await recommendationCollection.find({ queryId }).toArray();
+        res.json(recommendations);
+    } catch (error) {
+        console.error("Error fetching recommendations:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+// PATCH route to update a specific query by its ID
+app.patch('/query/:queryId', async (req, res) => {
+    const { queryId } = req.params; // Extract the queryId from the URL
+    const updateData = req.body;   // Data sent in the request body to update
+
+    // Remove _id from the updateData object to avoid updating it
+    delete updateData._id;
+
+    if (!ObjectId.isValid(queryId)) {
+        return res.status(400).json({ error: 'Invalid Query ID format' });
+    }
+
+    try {
+        // Update the query with the provided fields
+        const result = await productsCollection.updateOne(
+            { _id: new ObjectId(queryId) },  // Find query by its ID
+            { $set: updateData }  // Use $set to update specific fields
+        );
+
+        // If no document is updated, return a 404 error
+        if (result.modifiedCount === 0) {
+            return res.status(404).json({ error: 'Query not found' });
+        }
+
+        res.status(200).json({ message: 'Query updated successfully' });
+    } catch (error) {
+        console.error('Error updating query:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
 
 
 // Start the connection and server
